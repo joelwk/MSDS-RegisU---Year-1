@@ -1,0 +1,101 @@
+---
+title: "Week 4: Exercise (One-way ANOVA)"
+author: "Joel Konitzer"
+date: '2022-07-27'
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# load the data.table, ggolot2, and dplyr libraries
+library(data.table)
+library(rigr)
+library(rjson)
+library(dplyr)
+```
+
+### Introduction 
+To better understand a dataset, statistical methods are applied to identify trends and variations that may not be apparent otherwise. One of these methods is called the One-way Analysis of Variants, also known as One-way ANOVA. This method compares population means to determine where variability is greater- between or within groups. The dataset used is an aggregate of ticket detail data from my employer's SQL database. I created a dataset that grouped customer, ticket type, and open ticket date and then calculated total time cost in hours and total ticket count. I transformed the open date into the open week and then divided the total time cost by total tickets to give me the average cost per ticket. The exercise intends to demonstrate the One-way ANOVA by looking at the average cost per ticket type. 
+```{r}
+# Load data
+df <- read.csv('cust_avg.csv')
+df <- as.data.table(df)
+
+```
+
+
+```{r}
+# EDA ---------------------------------------------------------------------
+# Check the structure
+dim(df)
+str(df)
+
+#View summary statistics, value distribution, and outlier detection
+summary(df)
+hist(df$avg_cost_per_ticket, main = "Avg cost per ticket distribution")
+plot(density(df$avg_cost_per_ticket,na.rm=TRUE), main = "Avg cost per ticket distribution")
+boxplot(avg_cost_per_ticket~ type, las=2,cex.axis=.7,data=df, main = "Avg cost per ticket: with outliers")
+
+# Remove the outliers from avg cost
+# Select upper & lower quartiles to assign as outliers
+quartiles <- quantile(df$avg_cost_per_ticket, probs=c(.25, .75), na.rm = TRUE)
+IQR <- IQR(df$avg_cost_per_ticket, na.rm = TRUE)
+Lower <- quartiles[1] - 1.5*IQR
+Upper <- quartiles[2] + 1.5*IQR
+df <- subset(df, df$avg_cost_per_ticket > Lower & df$avg_cost_per_ticket < Upper)
+
+df
+df_ <-
+  df %>% mutate(avg_cost_per_ticket = scale(avg_cost_per_ticket))
+df_
+
+#Remove NAs
+df_ <- df_[complete.cases(df_),]
+dim(df_)
+
+summary(df_)
+boxplot(avg_cost_per_ticket ~ type,las=2,cex.axis=.7,data=df_,main = "Avg cost per ticket: without outliers")
+hist(df_$avg_cost_per_ticket, main = "Avg cost per ticket distribution")
+plot(density(df_$avg_cost_per_ticket,na.rm=TRUE), main = "Avg cost per ticket distribution")
+```
+
+### Methods 
+The exercise intends to demonstrate the One-way ANOVA by looking at the average cost per ticket type. The average cost per ticket is an aggregate of two measurements, cost and ticket count. By aggregating these two, we can assess the value associated with a ticket type. The resulting dataset can then identify if the average cost per ticket varies between types and, depending on results, do these variations match expectations. Other transformations to the dataset included standardized numeric values to Z-scores, removing the NA values, and then using the IQR zone as a reference for outlier removal
+
+```{r}
+# Fit the dependent variable to the categorical variables using ANOVA-------------------------------------------------------
+fit <- lm(avg_cost_per_ticket ~ type, data = df_) # Fit the avg cost to type
+summary(fit) # View the fit summary
+anova(fit) # View ANOVA p-value for the fit
+par(mfrow=c(2,2)) # Change the plot window to a 2x2
+plot(fit) # plot the residuals
+
+df_
+
+# Create the ANOVA
+afit <- aov(avg_cost_per_ticket ~ type, data = df_)
+# View the ANOVA summary
+summary(afit) # View the summary
+# View the coefficients of the ANOVA fit
+coefficients(afit) 
+par(mfrow=c(2,2)) # Change the plot window to a 2x2
+plot(afit)
+```   
+### Results
+The initial fit summary and ANOVA fit showed low p-values for all ticket types, with our range of significance of 0.001 and F value of 11, after removing the outliers and converting numeric values to Z-scores. The residuals plotted showed the dataset values to be well distributed; however, some outliers remained in the dataset. The results from the TukeyHSD showed the highest variation between Service-Request and Events with a p-value of 0.00000008. In contrast, the lowest variation existed between Service Request and Request for Information tickets with a p-value of 0.99. The extreme F value indicates that variation is more significant between groups than within groups. By plotting the TukeyHSD the mean differences can be visualized, illustrating the results from the fit summary.
+	
+```{r}
+# Run regression ----------------------------------------------------------
+# Perform the post hoc analysis that you were assigned.
+TukeyHSD(afit)
+plot(TukeyHSD(afit))
+```   
+### Conclusion
+This exercise demonstrated what native R functions and statistical methods could help identify when analyzing a dataset. The results from these exercises illustrate and quantify the variation between ticket types by open week using the average cost per ticket. The exercise did not have any major hangups. However, some cost amounts were extreme relative to others, so values were converted to their equivalent z-scores. Further analysis should be done to look at ticket subtypes and items to identify variations at a more granular level of ticket detail. 
+

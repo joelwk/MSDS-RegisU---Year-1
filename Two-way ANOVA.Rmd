@@ -1,0 +1,155 @@
+---
+title: "Week 5: Project (Two-way ANOVA)"
+author: "Joel Konitzer"
+date: '2022-08-01'
+output:
+  pdf_document: default
+  html_document: default
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+# Load the libraries
+library(data.table)
+library(qdata)
+```
+
+### Introduction 
+There are many instances where it's important to understand a system's behavior, specifically, how the actors within that system interact. To understand these interactions, data scientists must employ statistical methods to measure these interactions accurately. A two-way ANOVA is a statistical method where interaction effects can be measured to help explain the behavior of some dependent variable of interest. To demonstrate this method, I used Service Ticket data from my employer and summarized average ticket costs by priority and type. This project aims to understand the interaction effects of ticket priority and type on average ticket cost. 
+
+```{r}
+# Load data
+dt <- read.csv('data.csv')
+# Select columns
+dt <- dt[c('priority', 'type', 'cost')]
+
+# Convert data set to data.table
+# Convert categorical data to factors
+dt <- as.data.frame(unclass(dt), stringsAsFactors = TRUE)
+dt <- as.data.table(dt)
+```
+
+
+```{r}
+# EDA ---------------------------------------------------------------------
+# Drop any NA values
+dt <- dt[complete.cases(dt),]
+# Check structure of dt
+dim(dt)
+str(dt)
+
+#View summary statistics, value distribution, and outlier detection
+summary(dt)
+
+hist(dt$cost,
+     prob=TRUE,
+     main = "Histogram of Average Ticket Cost",
+     xlab = "Number of interactions",
+     ylab = "Density",
+     col="Green")
+# Plot Enjoyment vs the 2 other factors 
+plot.design(cost ~ ., data = dt)
+
+# Plot Individual Boxplots with means
+boxplot(cost ~ priority, data = dt,las=2,cex.axis=.7, ylab = 'average cost', xlab = 'priority')
+points(dt[, mean(cost), by=priority])
+
+boxplot(cost ~ type, data = dt,las=2,cex.axis=.7, ylab = 'average cost', xlab = 'ticket type')
+points(dt[, mean(cost), by=type])
+
+# Remove the outliers from avg cost
+# Select upper & lower quartiles to assign as outliers
+quartiles <- quantile(dt$cost, probs=c(.25, .75), na.rm = TRUE)
+IQR <- IQR(dt$cost, na.rm = TRUE)
+Lower <- quartiles[1] - 1.5*IQR
+Upper <- quartiles[2] + 1.5*IQR
+dt_clean <- subset(dt, dt$cost > Lower & dt$cost < Upper)
+#Remove any observation over 1
+dt_clean <- dt_clean[cost > 1,]
+
+
+# Plot Individual Boxplots with means
+boxplot(cost ~ priority, data = dt,las=2,cex.axis=.7, ylab = 'Cost', xlab = 'priority')
+points(dt[, mean(cost), by=priority])
+
+
+# Interaction plot to identify if ticket priority is 
+interaction.plot(x.factor = dt$priority,
+                 trace.factor = dt$type,
+                 response = dt$cost,
+                 fun = mean, 
+                 type = "b",  # shows each point
+                 main = "Interaction Plot",las=2,cex.axis=.5,
+                 legend = TRUE,
+                 trace.label = "Type",
+                 xlab = "type",
+                 pch=c(1, 2, 3, 4, 5),
+                 ylab="Cost",
+                 col = c("Red"))
+
+boxplot(cost ~ type, data = dt_clean,las=2,cex.axis=.7, ylab = 'Cost', xlab = 'ticket cost')
+points(dt_clean[, mean(cost), by=type])
+
+# Interaction plot to identify if ticket priority is 
+interaction.plot(x.factor = dt_clean$priority,
+                 trace.factor = dt_clean$type, 
+                 response = dt_clean$cost,
+                 fun = mean, 
+                 type = "b",  # shows each point
+                 main = "Interaction Plot",las=2,cex.axis=.5,
+                 legend = TRUE,
+                 trace.label = "Type",
+                 xlab = "type",
+                 pch=c(1, 2, 3, 4, 5),
+                 ylab="Cost",
+                 col = c("Red"))
+
+```
+
+### Methods 
+The dataset created for this project was an aggregate of ticket details spanning the current year. The cost associated with each ticket corresponds to the technician's actual hours when the ticket is completed multiplied by their hourly rate. Aggregating this data gives a summarized view of ticket priority and types with the associated average time cost. Standard R functions were used to filter the dataset as needed; for example, outliers were removed using the IQR method to increase model results. The Shapiro test was performed to verify data normality, and the TukeyHSD was used to perform the Post Hoc test after the model was fit using the aov function. 
+
+```{r}
+# Using original data
+# Build ANOVA model - the * is giving interactions. Show anova fit summary
+model <- aov(cost ~ priority * type, data = dt)
+summary(model)
+
+# Using clean data
+# Build ANOVA model - the * is giving interactions. Show anova fit summary
+model_clean <- aov(cost ~ priority * type, data = dt_clean)
+summary(model_clean)
+
+```   
+### Results
+The results from the ANOVA using the original dataset showed interaction effects between priority:type with a p-value of 0.00746 at the 95% confidence level. The same was not the case for the clean dataset. The clean dataset summary did not have significant p-values, indicating interaction effects within the clean dataset observations. The model created from the original dataset was passed to the TukeyHSD function to identify the suspected interactions. Interaction effects were confirmed between Priority 5:Service Request-Priority 3:Incident with a p-value of 0.00397 and Priority 5:Service Request-Priority 4:Incident  with a p-value of 0.00415. After the interaction p-values were obtained, the dataset quality was checked by plotting the model and using the Shapiro test to check normality. The plot showed the existence of many outliers in the original dataset, which was then confirmed using the Shapiro test by returning a p-value of 2.2 X 10^-16. 
+	
+```{r}
+# Run regression ----------------------------------------------------------
+# Perform the post hoc analysis that you were assigned.
+TukeyHSD(model)
+plot(TukeyHSD(model))
+
+```   
+
+
+
+```{r}
+#Verify residual distribution
+# Plot the residuals of the fit
+par(mfrow = c(2,2))
+plot(model)
+
+# Perform Shapiro test to see if residuals are normal distributed.
+shapiro.test(residuals(model))
+hist(residuals(model))
+``` 
+
+### Conclusion
+
+This project was successful in that interaction effects were observed for two distinct priority:ticket combinations. It’s important to state that the dataset used failed the Shapiro test for normality, so although there were interaction effects, additional data transformations should be done in future analysis. This type of analysis can provide a depth of value given the right business scenario and data quality; sufficient data quality was the most challenging task for this project. Once the data was aggregated and staged, it was quickly learned that having too many categories/factors greatly influence model performance and readability of R output. The results from the analysis were close to what was expected. However, it was not expected that the clean dataset would yield worse results than the original. In future analysis, further steps are required to clean the dataset to achieve better model results. 
+
