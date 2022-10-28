@@ -1,7 +1,6 @@
 from bs4 import BeautifulSoup
 import pandas as pd
 import requests
-#https://www.youtube.com/watch?v=PPcgtx0sI2E&list=WL&index=2
 
 def extract(job,location_city,location_state,page):
     headers = {'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5060.53 Safari/537.36'}
